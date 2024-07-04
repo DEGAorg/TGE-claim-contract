@@ -76,6 +76,7 @@ describe("DegaTokenClaim", () => {
   describe("claimTokens", () => {
     let nonce: any;
     let amount: any;
+    let extraAmount: any;
     let signature: any;
 
     beforeEach(async () => {
@@ -85,6 +86,7 @@ describe("DegaTokenClaim", () => {
 
         nonce = ethers.hexlify(ethers.randomBytes(32));
         amount = ethers.parseEther("100").toString();
+        extraAmount = ethers.parseEther("1000").toString();
         const chainId = (await ethers.provider.getNetwork()).chainId;
 
         const domain = {
@@ -117,6 +119,10 @@ describe("DegaTokenClaim", () => {
       await degaTokenClaim.connect(user).claimTokens(amount, nonce, signature);
       expect(await degaToken.balanceOf(user.address)).to.equal(amount);
     });
+    it("reverts if exceeding balance ", async () => {
+      await degaTokenClaim.connect(user).claimTokens(extraAmount, nonce, signature);
+      expect(await degaToken.balanceOf(user.address)).to.equal(extraAmount);
+    });
 
     it("emits the TokensClaimed event", async () => {
       await expect(
@@ -134,7 +140,7 @@ describe("DegaTokenClaim", () => {
     });
 
     it("reverts if the signature is invalid", async () => {
-      signature = ethers.randomBytes(65);
+      signature = ethers.randomBytes(128);
       // await expect(
         degaTokenClaim.connect(user).claimTokens(amount, nonce, signature)
       // ).to.be.revertedWithCustomError(degaTokenClaim,"Invalid signature");

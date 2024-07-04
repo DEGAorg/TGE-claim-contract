@@ -6,8 +6,11 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "hardhat/console.sol";
+
+
 /**
  * @title DegaTokenClaim
  * @dev Contract to manage the claim of DEGA tokens using an authorized signature mechanism. 
@@ -26,6 +29,7 @@ import "hardhat/console.sol";
  */
 contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
     using ECDSA for bytes32;
+    using MessageHashUtils for bytes32;
 
     IERC20 public degaToken;
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -95,6 +99,8 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
     function claimTokens(uint256 _amount, bytes32 _nonce, bytes calldata _signature) external whenNotPaused {
         require(!usedNonces[_nonce], "Nonce already used");
 
+        require(degaToken.balanceOf(address(this)) >= _amount, "Insufficient contract balance");
+        
         bytes32 structHash = keccak256(abi.encode(
             CLAIM_TYPEHASH,
             msg.sender,
@@ -102,9 +108,14 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
             _nonce,
             block.chainid
         ));
-        bytes32 digest = _hashTypedDataV4(structHash);
 
+        bytes32 digest = _hashTypedDataV4(structHash);
+        
         address signer = ECDSA.recover(digest, _signature);
+        // console.log("--> amount :%s", _amount);
+        console.log("signer :%s", signer);
+        // console.log("authorizedSigner :%s", authorizedSigner);
+
         require(signer == authorizedSigner, "Invalid signature");
 
         usedNonces[_nonce] = true;
