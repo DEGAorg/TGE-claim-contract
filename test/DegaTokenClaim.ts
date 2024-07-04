@@ -15,14 +15,15 @@ describe("DegaTokenClaim", () => {
 
     degaToken = await ethers.deployContract("DegaToken", ["$DEGA", "$DEGA"]);
 
-    await degaToken.initialize(ethers.parseEther("1000000"));
-
     degaTokenClaim = await ethers.deployContract("DegaTokenClaim", [
       await degaToken.getAddress(),
       admin.address,
     ]);
 
-    await degaToken.transfer(await degaTokenClaim.getAddress(), ethers.parseEther("500000"));
+    await degaToken.transfer(
+      await degaTokenClaim.getAddress(),
+      ethers.parseEther("500000")
+    );
   });
 
   describe("constructor", () => {
@@ -84,35 +85,35 @@ describe("DegaTokenClaim", () => {
         .connect(admin)
         .setAuthorizedSigner(await authorizedSigner.getAddress());
 
-        nonce = ethers.hexlify(ethers.randomBytes(32));
-        amount = ethers.parseEther("100").toString();
-        extraAmount = ethers.parseEther("1000").toString();
-        const chainId = (await ethers.provider.getNetwork()).chainId;
+      nonce = ethers.hexlify(ethers.randomBytes(32));
+      amount = ethers.parseEther("100").toString();
+      extraAmount = ethers.parseEther("500001").toString();
+      const chainId = (await ethers.provider.getNetwork()).chainId;
 
-        const domain = {
-          name: "DegaTokenClaim",
-          version: "1",
-          chainId,
-          verifyingContract: await degaTokenClaim.getAddress(),
-        };
-  
-        const types = {
-          Claim: [
-            { name: "user", type: "address" },
-            { name: "amount", type: "uint256" },
-            { name: "nonce", type: "bytes32" },
-            { name: "chainId", type: "uint256" },
-          ],
-        };
+      const domain = {
+        name: "DegaTokenClaim",
+        version: "1",
+        chainId,
+        verifyingContract: await degaTokenClaim.getAddress(),
+      };
 
-        const value = {
-          user: user.address,
-          amount,
-          nonce,
-          chainId,
-        };
-  
-        signature = await authorizedSigner.signTypedData(domain, types, value);
+      const types = {
+        Claim: [
+          { name: "user", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "nonce", type: "bytes32" },
+          { name: "chainId", type: "uint256" },
+        ],
+      };
+
+      const value = {
+        user: user.address,
+        amount,
+        nonce,
+        chainId,
+      };
+
+      signature = await authorizedSigner.signTypedData(domain, types, value);
     });
 
     it("transfers tokens to the user", async () => {
@@ -120,8 +121,37 @@ describe("DegaTokenClaim", () => {
       expect(await degaToken.balanceOf(user.address)).to.equal(amount);
     });
     it("reverts if exceeding balance ", async () => {
-      await degaTokenClaim.connect(user).claimTokens(extraAmount, nonce, signature);
-      expect(await degaToken.balanceOf(user.address)).to.equal(extraAmount);
+      const chainId = (await ethers.provider.getNetwork()).chainId;
+      nonce = ethers.hexlify(ethers.randomBytes(32));
+
+      const domain = {
+        name: "DegaTokenClaim",
+        version: "1",
+        chainId,
+        verifyingContract: await degaTokenClaim.getAddress(),
+      };
+
+      const types = {
+        Claim: [
+          { name: "user", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "nonce", type: "bytes32" },
+          { name: "chainId", type: "uint256" },
+        ],
+      };
+
+      const value = {
+        user: user.address,
+        amount: extraAmount,
+        nonce,
+        chainId,
+      };
+
+      signature = await authorizedSigner.signTypedData(domain, types, value);
+
+      await expect(
+        degaTokenClaim.connect(user).claimTokens(extraAmount, nonce, signature)
+      ).to.be.revertedWith("Insufficient contract balance");
     });
 
     it("emits the TokensClaimed event", async () => {
@@ -140,10 +170,13 @@ describe("DegaTokenClaim", () => {
     });
 
     it("reverts if the signature is invalid", async () => {
-      signature = ethers.randomBytes(128);
-      // await expect(
+      signature = ethers.randomBytes(0);
+      await expect(
         degaTokenClaim.connect(user).claimTokens(amount, nonce, signature)
-      // ).to.be.revertedWithCustomError(degaTokenClaim,"Invalid signature");
+      ).to.be.revertedWithCustomError(
+        degaTokenClaim,
+        "ECDSAInvalidSignatureLength"
+      );
     });
   });
 
@@ -151,7 +184,10 @@ describe("DegaTokenClaim", () => {
     it("adds a new admin", async () => {
       await degaTokenClaim.connect(admin).addAdmin(user.address);
       expect(
-        await degaTokenClaim.hasRole(await degaTokenClaim.ADMIN_ROLE(), user.address)
+        await degaTokenClaim.hasRole(
+          await degaTokenClaim.ADMIN_ROLE(),
+          user.address
+        )
       ).to.be.true;
     });
 
@@ -176,7 +212,10 @@ describe("DegaTokenClaim", () => {
       await degaTokenClaim.connect(admin).addAdmin(user.address);
       await degaTokenClaim.connect(admin).removeAdmin(user.address);
       expect(
-        await degaTokenClaim.hasRole(await degaTokenClaim.ADMIN_ROLE(), user.address)
+        await degaTokenClaim.hasRole(
+          await degaTokenClaim.ADMIN_ROLE(),
+          user.address
+        )
       ).to.be.false;
     });
 

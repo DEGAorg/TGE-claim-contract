@@ -10,7 +10,6 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "hardhat/console.sol";
 
-
 /**
  * @title DegaTokenClaim
  * @dev Contract to manage the claim of DEGA tokens using an authorized signature mechanism. 
@@ -114,7 +113,7 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
         address signer = ECDSA.recover(digest, _signature);
         // console.log("--> amount :%s", _amount);
         console.log("signer :%s", signer);
-        // console.log("authorizedSigner :%s", authorizedSigner);
+        console.log("authorizedSigner :%s", authorizedSigner);
 
         require(signer == authorizedSigner, "Invalid signature");
 
