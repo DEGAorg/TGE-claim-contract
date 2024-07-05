@@ -98,6 +98,8 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
     function claimTokens(uint256 _amount, bytes32 _nonce, bytes calldata _signature) external whenNotPaused {
         require(!usedNonces[_nonce], "Nonce already used");
 
+        require(_amount > 0, "Amount must be greater than zero");
+        require(msg.sender != address(0), "Invalid Address");
         require(degaToken.balanceOf(address(this)) >= _amount, "Insufficient contract balance");
         
         bytes32 structHash = keccak256(abi.encode(
@@ -111,9 +113,6 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
         bytes32 digest = _hashTypedDataV4(structHash);
         
         address signer = ECDSA.recover(digest, _signature);
-        // console.log("--> amount :%s", _amount);
-        console.log("signer :%s", signer);
-        console.log("authorizedSigner :%s", authorizedSigner);
 
         require(signer == authorizedSigner, "Invalid signature");
 

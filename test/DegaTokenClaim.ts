@@ -1,4 +1,9 @@
-// tests/DegaTokenClaim.test.js
+// SPDX-License-Identifier: MIT
+/**
+ * @title DegaTokenClaim Contract Test Suite
+ * @notice This suite tests the DegaTokenClaim smart contract using Hardhat and Chai.
+ */
+
 import { expect } from "chai";
 import { Signer } from "ethers";
 import { ethers } from "hardhat";
@@ -10,6 +15,9 @@ describe("DegaTokenClaim", () => {
   let user: any;
   let authorizedSigner: Signer;
 
+  /**
+   * @notice Before each test, deploy the DegaToken and DegaTokenClaim contracts, and set up the initial state.
+   */
   beforeEach(async () => {
     [admin, user, authorizedSigner] = await ethers.getSigners();
 
@@ -26,6 +34,9 @@ describe("DegaTokenClaim", () => {
     );
   });
 
+  /**
+   * @notice Test suite for the constructor of DegaTokenClaim.
+   */
   describe("constructor", () => {
     it("sets the DEGA token address", async () => {
       expect(await degaTokenClaim.degaToken()).to.equal(
@@ -42,6 +53,9 @@ describe("DegaTokenClaim", () => {
     });
   });
 
+  /**
+   * @notice Test suite for the setAuthorizedSigner function of DegaTokenClaim.
+   */
   describe("setAuthorizedSigner", () => {
     it("sets the authorized signer", async () => {
       await degaTokenClaim
@@ -74,6 +88,9 @@ describe("DegaTokenClaim", () => {
     });
   });
 
+  /**
+   * @notice Test suite for the claimTokens function of DegaTokenClaim.
+   */
   describe("claimTokens", () => {
     let nonce: any;
     let amount: any;
@@ -120,6 +137,7 @@ describe("DegaTokenClaim", () => {
       await degaTokenClaim.connect(user).claimTokens(amount, nonce, signature);
       expect(await degaToken.balanceOf(user.address)).to.equal(amount);
     });
+
     it("reverts if exceeding balance ", async () => {
       const chainId = (await ethers.provider.getNetwork()).chainId;
       nonce = ethers.hexlify(ethers.randomBytes(32));
@@ -180,6 +198,9 @@ describe("DegaTokenClaim", () => {
     });
   });
 
+  /**
+   * @notice Test suite for the addAdmin function of DegaTokenClaim.
+   */
   describe("addAdmin", () => {
     it("adds a new admin", async () => {
       await degaTokenClaim.connect(admin).addAdmin(user.address);
@@ -207,6 +228,9 @@ describe("DegaTokenClaim", () => {
     });
   });
 
+  /**
+   * @notice Test suite for the removeAdmin function of DegaTokenClaim.
+   */
   describe("removeAdmin", () => {
     it("removes an admin", async () => {
       await degaTokenClaim.connect(admin).addAdmin(user.address);

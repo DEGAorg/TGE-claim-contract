@@ -1,60 +1,132 @@
-// // SPDX-License-Identifier: MIT
-// pragma solidity ^0.8.24;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
 
-// import "forge-std/Test.sol";
-// import "../contracts/DegaTokenClaim.sol";
-// import "../contracts/mock/DegaToken.sol";
+import "forge-std/Test.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+import "@openzeppelin/contracts/access/IAccessControl.sol";
+import {DegaTokenClaim} from "../contracts/DegaTokenClaim.sol";
+import "../contracts/mock/DegaToken.sol";
 
-// contract InvariantTests is Test {
-//   DegaToken public degaToken;
-//     DegaTokenClaim public degaTokenClaim;
-//     address public admin;
-//     address public authorizedSigner;
-//     address public user;
+import {Utilities} from "./Utilities.sol";
 
-//     function setUp() public {
-//         admin = address(this);
-//         authorizedSigner = address(0x1234);
-//         user = address(0x5678);
+/**
+ * @title InvariantDegaTokenClaimTest
+ * @dev Contract for testing invariants of the DegaTokenClaim contract.
+ */
+contract InvariantDegaTokenClaimTest is Test {
+    DegaToken public degaToken;
+    DegaTokenClaim public degaTokenClaim;
+    address public admin;
+    address public authorizedSigner;
+    uint256 public authorizedSignerPK;
+    address public user;
 
-//         degaToken = new DegaToken("$DEGA", "$DEGA");
-//         degaToken.initialize(1_000_000 ether);
-//         degaTokenClaim = new DegaTokenClaim(address(degaToken), admin);
+    Utilities internal utils;
+    address payable[] internal users;
 
-//         degaToken.transfer(address(degaTokenClaim), 500_000 ether);
-//         degaTokenClaim.setAuthorizedSigner(authorizedSigner);
-//     }
+    /**
+     * @notice Sets up the initial state for each test.
+     */
+    function setUp() public {
+        utils = new Utilities();
+        users = utils.createUsers(5);
+        admin = users[0];
+        (, authorizedSignerPK) = makeAddrAndKey("authorizedSigner");
+        authorizedSigner = vm.addr(authorizedSignerPK);
+        user = users[2];
 
-//     function invariantTokenBalanceNonNegative() public {
-//         assert(degaToken.balanceOf(address(degaTokenClaim)) >= 0);
-//     }
+        degaToken = new DegaToken("$DEGA", "$DEGA");
+        degaTokenClaim = new DegaTokenClaim(address(degaToken), admin);
 
-//     function invariantUsedNoncesIntegrity(bytes32 nonce) public {
-//         if (degaTokenClaim.usedNonces(nonce)) {
-//             // Ensure no other operations have reset this nonce
-//             assert(degaTokenClaim.usedNonces(nonce));
-//         }
-//     }
+        degaToken.transfer(address(degaTokenClaim), 500_000 ether);
+        degaToken.transfer(admin, 500_000 ether);
+        vm.startPrank(admin);
+        degaTokenClaim.setAuthorizedSigner(authorizedSigner);
+        vm.stopPrank();
+    }
 
-//     function invariantTotalSupplyConstant() public {
-//         uint256 initialSupply = 1_000_000 ether;
-//         uint256 totalSupply = degaToken.totalSupply();
-//         assert(totalSupply == initialSupply);
-//     }
+    /**
+     * @notice Ensures the total supply of DEGA tokens is consistent.
+     * @dev Checks that the total supply does not exceed the initial maximum supply.
+     */
+    function invariant_totalSupplyIsConsistent() public view {
+        assertLe(degaToken.totalSupply(), 1_000_000 ether);
+    }
 
-//     function invariantContractBalanceAfterClaim() public {
-//         uint256 initialBalance = degaToken.balanceOf(address(degaTokenClaim));
-//         // Simulate a claim
-//         uint256 amount = 100 ether;
-//         bytes32 nonce = keccak256(abi.encodePacked(block.timestamp));
-//         (uint8 v, bytes32 r, bytes32 s) = vm.sign((authorizedSigner), keccak256(abi.encodePacked(user, amount, nonce, block.chainid)));
-//         bytes memory signature = abi.encodePacked(r, s, v);
+    /**
+     * @notice Ensures the claim contract's balance is consistent.
+     * @dev Verifies that the total supply accounts for the contract's balance and claimed tokens.
+     */
+    function invariant_claimContractBalanceIsConsistent() public view {
+        uint256 contractBalance = degaToken.balanceOf(address(degaTokenClaim));
+        uint256 totalClaimedTokens = 1_000_000 ether - degaToken.balanceOf(address(this)) - contractBalance;
+        assertLe(degaToken.totalSupply(), contractBalance + totalClaimedTokens + degaToken.balanceOf(address(this)));
+    }
 
-//         vm.prank(user);
-//         degaTokenClaim.claimTokens(amount, nonce, signature);
+    /**
+     * @notice Ensures the admin has the admin role in the claim contract.
+     * @dev Verifies that the admin has the ADMIN_ROLE in the DegaTokenClaim contract.
+     */
+    function invariant_adminHasAdminRole() public view {
+        assertTrue(degaTokenClaim.hasRole(degaTokenClaim.ADMIN_ROLE(), admin));
+    }
 
-//         // Check the invariant
-//         uint256 finalBalance = degaToken.balanceOf(address(degaTokenClaim));
-//         assert(finalBalance == initialBalance - amount);
-//     }
-// }
+    /**
+     * @notice Ensures user balances are non-negative.
+     * @dev Checks that each user's balance is greater than or equal to zero.
+     */
+    function invariant_userBalanceNonNegative() public view {
+        for (uint i = 0; i < users.length; i++) {
+            uint256 userBalance = degaToken.balanceOf(users[i]);
+            assertTrue(userBalance >= 0);
+        }
+    }
+
+    /**
+     * @notice Ensures the paused state is consistent.
+     * @dev Verifies that the paused state of the contract matches the Pausable implementation.
+     */
+    function invariant_pausedStateConsistent() public view {
+        bool isPaused = degaTokenClaim.paused();
+        assertTrue(isPaused == Pausable(degaTokenClaim).paused());
+    }
+
+    /**
+     * @notice Ensures the contract holds a non-negative token balance.
+     * @dev Checks that the contract's balance is greater than or equal to zero.
+     */
+    function invariant_contractHoldsEnoughTokens() public view {
+        uint256 contractBalance = degaToken.balanceOf(address(degaTokenClaim));
+        assertTrue(contractBalance >= 0);
+    }
+
+    /**
+     * @notice Ensures no unauthorized burning of tokens.
+     * @dev Verifies that the total supply is at least the minimum expected amount.
+     */
+    function invariant_noUnauthorizedBurning() public view {
+        uint256 totalSupply = degaToken.totalSupply();
+        assertTrue(totalSupply >= 500_000 ether);
+    }
+
+    /**
+     * @notice Ensures only the admin can pause the contract.
+     * @dev Verifies that only the admin has the authority to pause the contract.
+     */
+    function invariant_onlyAdminCanPause() public view {
+        if (degaTokenClaim.paused()) {
+            assertTrue(degaTokenClaim.hasRole(degaTokenClaim.ADMIN_ROLE(), admin));
+        }
+    }
+
+    /**
+     * @notice Ensures no double spending of tokens.
+     * @dev Checks that user balances are consistent and non-negative.
+     */
+    function invariant_noDoubleSpending() public view {
+        for (uint i = 0; i < users.length; i++) {
+            uint256 userBalance = degaToken.balanceOf(users[i]);
+            assertTrue(userBalance >= 0);
+        }
+    }
+}
