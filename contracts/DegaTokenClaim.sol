@@ -116,7 +116,7 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
         require(signer == authorizedSigner, "Invalid signature");
 
         usedUids[msg.sender][_uid] = true;
-        require(degaToken.transfer(msg.sender, _amount), "Token transfer failed");
+        degaToken.transfer(msg.sender, _amount);
 
         emit TokensClaimed(msg.sender, _amount, _uid);
     }
