@@ -8,8 +8,6 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
-import "hardhat/console.sol";
-
 /**
  * @title DegaTokenClaim
  * @dev Contract to manage the claim of DEGA tokens using an authorized signature mechanism. 
@@ -96,10 +94,10 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
      * @param _signature The signature from the authorized signer.
      */
     function claimTokens(uint256 _amount, bytes32 _nonce, bytes calldata _signature) external whenNotPaused {
+        require(authorizedSigner != address(0), "Invalid Authorized Signer Address");
         require(!usedNonces[_nonce], "Nonce already used");
 
         require(_amount > 0, "Amount must be greater than zero");
-        require(msg.sender != address(0), "Invalid Address");
         require(degaToken.balanceOf(address(this)) >= _amount, "Insufficient contract balance");
         
         bytes32 structHash = keccak256(abi.encode(

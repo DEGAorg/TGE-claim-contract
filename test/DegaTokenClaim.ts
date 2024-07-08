@@ -5,7 +5,7 @@
  */
 
 import { expect } from "chai";
-import { Signer } from "ethers";
+import { Signer, ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
 describe("DegaTokenClaim", () => {
@@ -136,6 +136,14 @@ describe("DegaTokenClaim", () => {
     it("transfers tokens to the user", async () => {
       await degaTokenClaim.connect(user).claimTokens(amount, nonce, signature);
       expect(await degaToken.balanceOf(user.address)).to.equal(amount);
+    });
+    
+    it("reverts is authorizedSigner is zero address", async () => {
+      await degaTokenClaim
+      .connect(admin)
+      .setAuthorizedSigner(ZeroAddress);
+
+      await expect(degaTokenClaim.connect(user).claimTokens(amount, nonce, signature)).to.be.revertedWith("Invalid Authorized Signer Address");
     });
 
     it("reverts if exceeding balance ", async () => {
