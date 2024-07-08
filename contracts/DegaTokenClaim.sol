@@ -31,22 +31,22 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
     IERC20 public degaToken;
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
-    /// Mapping to store the used nonces to prevent replay attacks
-    mapping(bytes32 => bool) public usedNonces;
+    // Mapping to store used uids for each address
+    mapping(address => mapping(bytes32 => bool)) private usedUids;
 
     /// Address authorized to sign the claims
     address public authorizedSigner;
 
     bytes32 private constant CLAIM_TYPEHASH =
-        keccak256("Claim(address user,uint256 amount,bytes32 nonce,uint256 chainId)");
+        keccak256("Claim(address user,uint256 amount,bytes32 uid)");
 
     /**
      * @dev Emitted when tokens are claimed.
      * @param user The address of the user claiming the tokens.
      * @param amount The amount of tokens claimed.
-     * @param nonce The nonce used for the claim.
+     * @param uid The uid used for the claim.
      */
-    event TokensClaimed(address indexed user, uint256 amount, bytes32 nonce);
+    event TokensClaimed(address indexed user, uint256 amount, bytes32 uid);
 
     /**
      * @dev Emitted when the authorized signer is updated.
@@ -90,12 +90,14 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
     /**
      * @notice Claim tokens with a valid signature.
      * @param _amount The amount of tokens to claim.
-     * @param _nonce The nonce to prevent replay attacks.
+     * @param _uid The unique identifier to prevent replay attacks.
      * @param _signature The signature from the authorized signer.
      */
-    function claimTokens(uint256 _amount, bytes32 _nonce, bytes calldata _signature) external whenNotPaused {
+    function claimTokens(uint256 _amount, bytes32 _uid, bytes calldata _signature) external whenNotPaused {
         require(authorizedSigner != address(0), "Invalid Authorized Signer Address");
-        require(!usedNonces[_nonce], "Nonce already used");
+        
+        // Ensure the uid has not been used by this sender
+        require(!usedUids[msg.sender][_uid], "UID has already been used");
 
         require(_amount > 0, "Amount must be greater than zero");
         require(degaToken.balanceOf(address(this)) >= _amount, "Insufficient contract balance");
@@ -104,8 +106,7 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
             CLAIM_TYPEHASH,
             msg.sender,
             _amount,
-            _nonce,
-            block.chainid
+            _uid
         ));
 
         bytes32 digest = _hashTypedDataV4(structHash);
@@ -114,10 +115,10 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
 
         require(signer == authorizedSigner, "Invalid signature");
 
-        usedNonces[_nonce] = true;
+        usedUids[msg.sender][_uid] = true;
         require(degaToken.transfer(msg.sender, _amount), "Token transfer failed");
 
-        emit TokensClaimed(msg.sender, _amount, _nonce);
+        emit TokensClaimed(msg.sender, _amount, _uid);
     }
 
     /**

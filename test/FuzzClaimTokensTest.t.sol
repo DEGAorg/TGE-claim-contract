@@ -26,9 +26,9 @@ contract FuzzClaimTokensTest is Test {
     address payable[] internal users;
 
     bytes32 private constant CLAIM_TYPEHASH =
-        keccak256("Claim(address user,uint256 amount,bytes32 nonce,uint256 chainId)");
+        keccak256("Claim(address user,uint256 amount,bytes32 uid)");
 
-    event TokensClaimed(address indexed user, uint256 amount, bytes32 nonce);
+    event TokensClaimed(address indexed user, uint256 amount, bytes32 uid);
     event SignerUpdated(address indexed newSigner);
     event AdminAdded(address indexed newAdmin);
     event AdminRemoved(address indexed admin);
@@ -83,17 +83,16 @@ contract FuzzClaimTokensTest is Test {
      * @dev Generates the digest for a claim.
      * @param userAddress The address of the user.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      * @return The claim digest.
      */
-    function getDigest(address userAddress, uint256 amount, bytes32 nonce) private view returns (bytes32) {
+    function getDigest(address userAddress, uint256 amount, bytes32 uid) private view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
                 CLAIM_TYPEHASH,
                 userAddress,
                 amount,
-                nonce,
-                block.chainid
+                uid
             )
         );
         return _hashTypedDataV4(structHash);
@@ -113,19 +112,17 @@ contract FuzzClaimTokensTest is Test {
     /**
      * @notice Tests the valid claiming of tokens.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testValidClaimTokens(uint256 amount, bytes32 nonce) public {
+    function testValidClaimTokens(uint256 amount, bytes32 uid) public {
         vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         vm.prank(user);
-        vm.expectEmit(true, true, true, true);
-        emit TokensClaimed(user, amount, nonce);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
         assertEq(degaToken.balanceOf(user), amount);
     }
 
@@ -133,130 +130,137 @@ contract FuzzClaimTokensTest is Test {
      * @notice Tests valid token claims for multiple users.
      * @param randomUser The address of a random user.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testValidClaimTokensForMultipleUsers(address randomUser, uint256 amount, bytes32 nonce) public {
+    function testValidClaimTokensForMultipleUsers(address randomUser, uint256 amount, bytes32 uid) public {
         vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
         vm.assume(randomUser != address(0));
 
-        bytes32 digest = getDigest(randomUser, amount, nonce);
+        bytes32 digest = getDigest(randomUser, amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         vm.prank(randomUser);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
         assertEq(degaToken.balanceOf(randomUser), amount);
+        vm.stopPrank();
     }
 
     /**
      * @notice Tests claiming tokens to the zero address.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testClaimZeroAddress(uint256 amount, bytes32 nonce) public {
+    function testClaimZeroAddress(uint256 amount, bytes32 uid) public {
         vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
-        bytes32 digest = getDigest(address(0x0), amount, nonce);
+        bytes32 digest = getDigest(address(0x0), amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         vm.prank(address(0x0));
         vm.expectRevert();
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
+        vm.stopPrank();
     }
 
     /**
      * @notice Tests claiming tokens with an invalid signature.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testInvalidSignature(uint256 amount, bytes32 nonce) public {
+    function testInvalidSignature(uint256 amount, bytes32 uid) public {
         vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory invalidSignature = getSignature(jhonDoePK, digest);
 
         vm.expectRevert("Invalid signature");
         vm.prank(user);
-        degaTokenClaim.claimTokens(amount, nonce, invalidSignature);
+        degaTokenClaim.claimTokens(amount, uid, invalidSignature);
+        vm.stopPrank();
     }
 
     /**
-     * @notice Tests the replay attack protection by using the same nonce twice.
+     * @notice Tests the replay attack protection by using the same uid twice.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testNonceReplayAttack(uint256 amount, bytes32 nonce) public {
+    function testuidReplayAttack(uint256 amount, bytes32 uid) public {
         vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         vm.prank(user);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
 
-        vm.expectRevert("Nonce already used");
+        vm.expectRevert("UID has already been used");
         vm.prank(user);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
+        vm.stopPrank();
     }
 
     /**
      * @notice Tests claiming tokens exceeding the contract balance.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testClaimExceedingBalance(uint256 amount, bytes32 nonce) public {
+    function testClaimExceedingBalance(uint256 amount, bytes32 uid) public {
         vm.assume(amount > degaToken.balanceOf(address(degaTokenClaim)));
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         vm.expectRevert("Insufficient contract balance");
         vm.prank(user);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
+        vm.stopPrank();
     }
 
     /**
      * @notice Tests pausing and unpausing the contract.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testPauseAndUnpause(uint256 amount, bytes32 nonce) public {
+    function testPauseAndUnpause(uint256 amount, bytes32 uid) public {
         vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
         vm.startPrank(admin);
         degaTokenClaim.pause();
         vm.stopPrank();
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         bytes4 expectedSelector = Pausable.EnforcedPause.selector;
         vm.expectRevert(expectedSelector);
         vm.prank(user);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
+        vm.stopPrank();
 
         vm.startPrank(admin);
         degaTokenClaim.unpause();
         vm.stopPrank();
 
         vm.prank(user);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
         assertEq(degaToken.balanceOf(user), amount);
+        vm.stopPrank();
     }
 
     /**
      * @notice Tests changing the authorized signer.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testChangeAuthorizedSigner(uint256 amount, bytes32 nonce) public {
+    function testChangeAuthorizedSigner(uint256 amount, bytes32 uid) public {
         vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
         address newSigner;
         uint256 newSignerPK;
@@ -269,80 +273,82 @@ contract FuzzClaimTokensTest is Test {
         degaTokenClaim.setAuthorizedSigner(newSigner);
         vm.stopPrank();
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory validSignature = getSignature(newSignerPK, digest);
 
         vm.prank(user);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
         assertEq(degaToken.balanceOf(user), amount);
+        vm.stopPrank();
     }
 
     /**
-     * @notice Tests reusing a nonce by different users.
+     * @notice Tests reusing a uid by different users.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testInvalidNonceReuseByDifferentUser(uint256 amount, bytes32 nonce) public {
-        vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+    function testInvaliduidReuseByDifferentUser(uint256 amount, bytes32 uid) public {
+        vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) / 3 && amount > 0);
+        vm.assume(uid != 0x0);
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         vm.prank(user);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
+        vm.stopPrank();
 
         address anotherUser = users[3];
         vm.prank(anotherUser);
-        vm.expectRevert("Nonce already used");
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        vm.expectRevert("Invalid signature");
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
     }
 
     /**
-     * @notice Tests multiple users claiming different nonces.
+     * @notice Tests multiple users claiming different uids.
      * @param amount1 The amount of tokens to claim for the first user.
      * @param amount2 The amount of tokens to claim for the second user.
-     * @param nonce1 The unique nonce for the first user's claim.
-     * @param nonce2 The unique nonce for the second user's claim.
+     * @param uid1 The unique uid for the first user's claim.
+     * @param uid2 The unique uid for the second user's claim.
      */
-    function testMultipleUsersClaimingDifferentNonces(uint256 amount1, uint256 amount2, bytes32 nonce1, bytes32 nonce2) public {
+    function testMultipleUsersClaimingDifferentuids(uint256 amount1, uint256 amount2, bytes32 uid1, bytes32 uid2) public {
         address user1 = users[2];
         address user2 = users[3];
 
         vm.assume(amount1 < degaToken.balanceOf(address(degaTokenClaim)) / 2 && amount1 > 0);
         vm.assume(amount2 < degaToken.balanceOf(address(degaTokenClaim)) / 2 && amount2 > 0);
-        vm.assume(nonce1 != 0x0 && nonce2 != 0x0);
+        vm.assume(uid1 != 0x0 && uid2 != 0x0);
         vm.assume(user1 != user2);
 
-        bytes32 digest1 = getDigest(user1, amount1, nonce1);
-        bytes32 digest2 = getDigest(user2, amount2, nonce2);
+        bytes32 digest1 = getDigest(user1, amount1, uid1);
+        bytes32 digest2 = getDigest(user2, amount2, uid2);
 
         bytes memory validSignature1 = getSignature(authorizedSignerPK, digest1);
         bytes memory validSignature2 = getSignature(authorizedSignerPK, digest2);
 
         vm.prank(user1);
-        degaTokenClaim.claimTokens(amount1, nonce1, validSignature1);
+        degaTokenClaim.claimTokens(amount1, uid1, validSignature1);
         assertEq(degaToken.balanceOf(user1), amount1);
 
         vm.prank(user2);
-        degaTokenClaim.claimTokens(amount2, nonce2, validSignature2);
+        degaTokenClaim.claimTokens(amount2, uid2, validSignature2);
         assertEq(degaToken.balanceOf(user2), amount2);
     }
 
     /**
      * @notice Tests claiming tokens with a zero amount.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testClaimWithZeroAmount(bytes32 nonce) public {
+    function testClaimWithZeroAmount(bytes32 uid) public {
         uint256 amount = 0;
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         vm.prank(user);
         vm.expectRevert("Amount must be greater than zero");
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
     }
 
     /**
@@ -373,19 +379,19 @@ contract FuzzClaimTokensTest is Test {
     /**
      * @notice Tests that claiming tokens emits the appropriate events.
      * @param amount The amount of tokens to claim.
-     * @param nonce The unique nonce for the claim.
+     * @param uid The unique uid for the claim.
      */
-    function testClaimEmitEvents(uint256 amount, bytes32 nonce) public {
+    function testClaimEmitEvents(uint256 amount, bytes32 uid) public {
         vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
-        vm.assume(nonce != 0x0);
+        vm.assume(uid != 0x0);
 
-        bytes32 digest = getDigest(user, amount, nonce);
+        bytes32 digest = getDigest(user, amount, uid);
         bytes memory validSignature = getSignature(authorizedSignerPK, digest);
 
         vm.prank(user);
         vm.expectEmit(true, true, true, true);
-        emit TokensClaimed(user, amount, nonce);
-        degaTokenClaim.claimTokens(amount, nonce, validSignature);
+        emit TokensClaimed(user, amount, uid);
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
     }
 
     /**

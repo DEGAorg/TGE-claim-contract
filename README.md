@@ -71,6 +71,129 @@ Configuration variables are set via tasks in the `vars` scope and can be retriev
    npm run test:coverage
    ```
 
+## Domain Separator
+
+### What is the Domain Separator?
+
+The domain separator is a unique identifier used in the EIP-712 standard for typed structured data hashing and signing. It ensures that the signed data is specific to a particular contract and chain, preventing replay attacks on different contracts or chains.
+
+In the `DegaTokenClaim` contract, the domain separator is used to generate a digest of the claim data, which is then signed by the authorized signer. This signed digest is submitted by the user to claim their tokens.
+
+### How to Use the Domain Separator from a UI with ethers.js
+
+To interact with the `DegaTokenClaim` contract from a UI and generate the necessary signature, you can follow these steps:
+
+1. **Import ethers.js**:
+   ```javascript
+   import { ethers } from "ethers";
+   ```
+
+2. **Set up the provider and signer**:
+   ```javascript
+   const provider = new ethers.providers.Web3Provider(window.ethereum);
+   const signer = provider.getSigner();
+   ```
+
+3. **Define the contract ABI and address**:
+   ```javascript
+   const degaTokenClaimAbi = [ /* ABI array */ ];
+   const degaTokenClaimAddress = "0xYourContractAddress";
+   const degaTokenClaimContract = new ethers.Contract(degaTokenClaimAddress, degaTokenClaimAbi, signer);
+   ```
+
+4. **Define the domain and types for EIP-712**:
+   ```javascript
+   const domain = {
+     name: "DegaTokenClaim",
+     version: "1",
+     verifyingContract: degaTokenClaimAddress
+   };
+
+   const types = {
+     Claim: [
+       { name: "user", type: "address" },
+       { name: "amount", type: "uint256" },
+       { name: "uid", type: "bytes32" }
+     ]
+   };
+   ```
+
+5. **Create the claim message**:
+   ```javascript
+   const userAddress = await signer.getAddress();
+   const amount = ethers.utils.parseEther("100"); // Amount to claim
+   const uid = ethers.utils.hexlify(ethers.utils.randomBytes(32)); // Unique UID
+
+   const message = {
+     user: userAddress,
+     amount: amount,
+     uid: uid
+   };
+   ```
+
+6. **Sign the message**:
+   ```javascript
+   const signature = await signer._signTypedData(domain, types, message);
+   ```
+
+7. **Send the transaction to claim tokens**:
+   ```javascript
+   const tx = await degaTokenClaimContract.claimTokens(amount, uid, signature);
+   await tx.wait();
+   console.log("Tokens claimed successfully!");
+   ```
+
+### Example Usage
+
+Here's a complete example of how you can integrate this into a UI using ethers.js:
+
+```javascript
+import { ethers } from "ethers";
+
+async function claimTokens() {
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = provider.getSigner();
+
+  const degaTokenClaimAbi = [ /* ABI array */ ];
+  const degaTokenClaimAddress = "0xYourContractAddress";
+  const degaTokenClaimContract = new ethers.Contract(degaTokenClaimAddress, degaTokenClaimAbi, signer);
+
+  const domain = {
+    name: "DegaTokenClaim",
+    version: "1",
+    verifyingContract: degaTokenClaimAddress
+  };
+
+  const types = {
+    Claim: [
+      { name: "user", type: "address" },
+      { name: "amount", type: "uint256" },
+      { name: "uid", type: "bytes32" }
+    ]
+  };
+
+  const userAddress = await signer.getAddress();
+  const amount = ethers.utils.parseEther("100"); // Amount to claim
+  const uid = ethers.utils.hexlify(ethers.utils.randomBytes(32)); // Unique UID
+
+  const message = {
+    user: userAddress,
+    amount: amount,
+    uid: uid
+  };
+
+  const signature = await signer._signTypedData(domain, types, message);
+
+  const tx = await degaTokenClaimContract.claimTokens(amount, uid, signature);
+  await tx.wait();
+  console.log("Tokens claimed successfully!");
+}
+
+claimTokens().catch(console.error);
+```
+
+This example shows how to create a UI that interacts with the `DegaTokenClaim` contract, allowing a user to claim tokens by generating a signed message using the EIP-712 standard.
+
 ## Project Structure
 
 - `contracts/` - Contains the Solidity smart contracts.

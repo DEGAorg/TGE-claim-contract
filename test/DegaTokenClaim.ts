@@ -92,7 +92,7 @@ describe("DegaTokenClaim", () => {
    * @notice Test suite for the claimTokens function of DegaTokenClaim.
    */
   describe("claimTokens", () => {
-    let nonce: any;
+    let uid: any;
     let amount: any;
     let extraAmount: any;
     let signature: any;
@@ -102,7 +102,7 @@ describe("DegaTokenClaim", () => {
         .connect(admin)
         .setAuthorizedSigner(await authorizedSigner.getAddress());
 
-      nonce = ethers.hexlify(ethers.randomBytes(32));
+      uid = ethers.hexlify(ethers.randomBytes(32));
       amount = ethers.parseEther("100").toString();
       extraAmount = ethers.parseEther("500001").toString();
       const chainId = (await ethers.provider.getNetwork()).chainId;
@@ -118,37 +118,34 @@ describe("DegaTokenClaim", () => {
         Claim: [
           { name: "user", type: "address" },
           { name: "amount", type: "uint256" },
-          { name: "nonce", type: "bytes32" },
-          { name: "chainId", type: "uint256" },
+          { name: "uid", type: "bytes32" },
         ],
       };
 
       const value = {
         user: user.address,
         amount,
-        nonce,
-        chainId,
+        uid,
       };
 
       signature = await authorizedSigner.signTypedData(domain, types, value);
     });
 
     it("transfers tokens to the user", async () => {
-      await degaTokenClaim.connect(user).claimTokens(amount, nonce, signature);
+      await degaTokenClaim.connect(user).claimTokens(amount, uid, signature);
       expect(await degaToken.balanceOf(user.address)).to.equal(amount);
     });
-    
-    it("reverts is authorizedSigner is zero address", async () => {
-      await degaTokenClaim
-      .connect(admin)
-      .setAuthorizedSigner(ZeroAddress);
 
-      await expect(degaTokenClaim.connect(user).claimTokens(amount, nonce, signature)).to.be.revertedWith("Invalid Authorized Signer Address");
+    it("reverts if authorizedSigner is zero address", async () => {
+      await degaTokenClaim.connect(admin).setAuthorizedSigner(ZeroAddress);
+      await expect(
+        degaTokenClaim.connect(user).claimTokens(amount, uid, signature)
+      ).to.be.revertedWith("Invalid Authorized Signer Address");
     });
 
-    it("reverts if exceeding balance ", async () => {
+    it("reverts if exceeding balance", async () => {
       const chainId = (await ethers.provider.getNetwork()).chainId;
-      nonce = ethers.hexlify(ethers.randomBytes(32));
+      uid = ethers.hexlify(ethers.randomBytes(32));
 
       const domain = {
         name: "DegaTokenClaim",
@@ -161,48 +158,43 @@ describe("DegaTokenClaim", () => {
         Claim: [
           { name: "user", type: "address" },
           { name: "amount", type: "uint256" },
-          { name: "nonce", type: "bytes32" },
-          { name: "chainId", type: "uint256" },
+          { name: "uid", type: "bytes32" },
         ],
       };
 
       const value = {
         user: user.address,
         amount: extraAmount,
-        nonce,
-        chainId,
+        uid,
       };
 
       signature = await authorizedSigner.signTypedData(domain, types, value);
 
       await expect(
-        degaTokenClaim.connect(user).claimTokens(extraAmount, nonce, signature)
+        degaTokenClaim.connect(user).claimTokens(extraAmount, uid, signature)
       ).to.be.revertedWith("Insufficient contract balance");
     });
 
     it("emits the TokensClaimed event", async () => {
       await expect(
-        degaTokenClaim.connect(user).claimTokens(amount, nonce, signature)
+        degaTokenClaim.connect(user).claimTokens(amount, uid, signature)
       )
         .to.emit(degaTokenClaim, "TokensClaimed")
-        .withArgs(user.address, amount, nonce);
+        .withArgs(user.address, amount, uid);
     });
 
-    it("reverts if the nonce is already used", async () => {
-      await degaTokenClaim.connect(user).claimTokens(amount, nonce, signature);
+    it("reverts if the uid is already used", async () => {
+      await degaTokenClaim.connect(user).claimTokens(amount, uid, signature);
       await expect(
-        degaTokenClaim.connect(user).claimTokens(amount, nonce, signature)
-      ).to.be.revertedWith("Nonce already used");
+        degaTokenClaim.connect(user).claimTokens(amount, uid, signature)
+      ).to.be.revertedWith("UID has already been used");
     });
 
     it("reverts if the signature is invalid", async () => {
       signature = ethers.randomBytes(0);
       await expect(
-        degaTokenClaim.connect(user).claimTokens(amount, nonce, signature)
-      ).to.be.revertedWithCustomError(
-        degaTokenClaim,
-        "ECDSAInvalidSignatureLength"
-      );
+        degaTokenClaim.connect(user).claimTokens(amount, uid, signature)
+      ).to.be.revertedWithCustomError(degaTokenClaim, "ECDSAInvalidSignatureLength");
     });
   });
 
