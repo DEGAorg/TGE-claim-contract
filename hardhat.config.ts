@@ -18,6 +18,10 @@ const config: HardhatUserConfig = {
       url: `https://binance.llamarpc.com`, 
       accounts: [PRIVATE_KEY], 
     }, 
+    eth_mainnet: { 
+      url: `https://eth.llamarpc.com`, 
+      accounts: [PRIVATE_KEY], 
+    }, 
   },
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
