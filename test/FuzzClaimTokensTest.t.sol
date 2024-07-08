@@ -110,6 +110,15 @@ contract FuzzClaimTokensTest is Test {
     }
 
     /**
+     * @notice Tests the constructor of the DegaTokenClaim contract.
+     */
+    function testConstructor() public {
+        DegaTokenClaim degaTokenConstructed = new DegaTokenClaim(address(degaToken), admin);
+        assertTrue(degaTokenConstructed.hasRole(degaTokenConstructed.DEFAULT_ADMIN_ROLE(), admin));
+        assertTrue(degaTokenConstructed.hasRole(degaTokenConstructed.ADMIN_ROLE(), admin));
+    }
+
+    /**
      * @notice Tests the valid claiming of tokens.
      * @param amount The amount of tokens to claim.
      * @param uid The unique uid for the claim.
@@ -124,6 +133,63 @@ contract FuzzClaimTokensTest is Test {
         vm.prank(user);
         degaTokenClaim.claimTokens(amount, uid, validSignature);
         assertEq(degaToken.balanceOf(user), amount);
+    }
+
+    /**
+     * @notice Tests the invalid claiming of tokens with a zero amount.
+     * @param uid The unique uid for the claim.
+     */
+    function testInvalidClaimZeroTokens(bytes32 uid) public {
+        uint zeroAmount = 0;
+        vm.assume(uid != 0x0);
+
+        bytes32 digest = getDigest(user, zeroAmount, uid);
+        bytes memory validSignature = getSignature(authorizedSignerPK, digest);
+
+        vm.prank(user);
+        vm.expectRevert("Amount must be greater than zero");
+        degaTokenClaim.claimTokens(zeroAmount, uid, validSignature);
+        assertEq(degaToken.balanceOf(user), zeroAmount);
+    }
+
+    /**
+     * @notice Tests the invalid claiming of tokens due to error in the ERC20 transfer.
+     * @param amount The amount of tokens to claim.
+     * @param uid The unique uid for the claim.
+     */
+    function testInValidClaimTokens(uint256 amount, bytes32 uid) public {
+        vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
+        vm.assume(uid != 0x0);
+        degaToken.setMockFail(true);
+
+        bytes32 digest = getDigest(user, amount, uid);
+        bytes memory validSignature = getSignature(authorizedSignerPK, digest);
+
+        vm.prank(user);
+        vm.expectRevert("Mock fail is enabled");
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
+        degaToken.setMockFail(false);
+    }
+
+    /**
+     * @notice Tests the invalid claiming of tokens due to authorized signer address being zero.
+     * @param amount The amount of tokens to claim.
+     * @param uid The unique uid for the claim.
+     */
+    function testInvalidClaimWithAuthorizedSignerZero(uint256 amount, bytes32 uid) public {
+        vm.assume(amount < degaToken.balanceOf(address(degaTokenClaim)) && amount > 0);
+        vm.assume(uid != 0x0);
+
+        vm.startPrank(admin);
+        degaTokenClaim.setAuthorizedSigner(address(0));
+        vm.stopPrank();
+
+        bytes32 digest = getDigest(user, amount, uid);
+        bytes memory validSignature = getSignature(authorizedSignerPK, digest);
+
+        vm.prank(user);
+        vm.expectRevert("Invalid Authorized Signer Address");
+        degaTokenClaim.claimTokens(amount, uid, validSignature);
     }
 
     /**
@@ -392,6 +458,32 @@ contract FuzzClaimTokensTest is Test {
         vm.expectEmit(true, true, true, true);
         emit TokensClaimed(user, amount, uid);
         degaTokenClaim.claimTokens(amount, uid, validSignature);
+    }
+
+    /**
+     * @notice Tests that only an admin can add and remove an admin.
+     * @param nonAdmin The address of a non-admin user.
+     * @param newAdmin The address of the new admin.
+     */
+    function testOnlyAdminCanAddAndRemoveAdmin(address nonAdmin, address newAdmin) public {
+        vm.assume(newAdmin != address(0));
+        vm.assume(newAdmin != admin);
+
+        vm.startPrank(nonAdmin);
+        vm.expectRevert();
+
+        degaTokenClaim.addAdmin(newAdmin);
+        vm.stopPrank();
+
+        assertFalse(degaTokenClaim.hasRole(degaTokenClaim.ADMIN_ROLE(), newAdmin));
+
+        vm.startPrank(nonAdmin);
+        vm.expectRevert();
+
+        degaTokenClaim.removeAdmin(newAdmin);
+        vm.stopPrank();
+
+        assertFalse(degaTokenClaim.hasRole(degaTokenClaim.ADMIN_ROLE(), newAdmin));
     }
 
     /**
