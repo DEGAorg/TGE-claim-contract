@@ -44,12 +44,13 @@ contract FuzzClaimTokensTest is Test {
         (, jhonDoePK) = makeAddrAndKey("JhonDoe");
         authorizedSigner = vm.addr(authorizedSignerPK);
         user = users[2];
-
+        vm.startPrank(admin);
         degaToken = new DegaToken("$DEGA", "$DEGA");
         degaTokenClaim = new DegaTokenClaim(address(degaToken), admin);
 
+        degaTokenClaim.grantRole(degaTokenClaim.ADMIN_ROLE(), admin);
         degaToken.transfer(address(degaTokenClaim), 500_000 ether);
-        vm.startPrank(admin);
+        
         degaTokenClaim.setAuthorizedSigner(authorizedSigner);
         vm.stopPrank();
     }

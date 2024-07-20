@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/access/extensions/AccessControlDefaultAdminRules.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
@@ -24,7 +24,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
  * - EIP712 for structured data hashing and signing.
  * - ECDSA for Elliptic Curve Digital Signature Algorithm operations.
  */
-contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
+contract DegaTokenClaim is AccessControlDefaultAdminRules, Pausable, EIP712 {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
@@ -71,9 +71,9 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
      * @param _tokenAddress The address of the DEGA token contract.
      * @param _initialAdmin The address of the initial admin.
      */
-    constructor(address _tokenAddress, address _initialAdmin) EIP712("DegaTokenClaim", "1") {
-        _grantRole(DEFAULT_ADMIN_ROLE, _initialAdmin);
-        _grantRole(ADMIN_ROLE, _initialAdmin);
+    constructor(address _tokenAddress, address _initialAdmin) 
+    AccessControlDefaultAdminRules(2, _initialAdmin) 
+    EIP712("DegaTokenClaim", "1") {
         degaToken = IERC20(_tokenAddress);
     }
 
@@ -82,7 +82,7 @@ contract DegaTokenClaim is AccessControl, Pausable, EIP712 {
      * @dev Only callable by accounts with the ADMIN_ROLE.
      * @param _signer The address of the new authorized signer.
      */
-    function setAuthorizedSigner(address _signer) external onlyRole(ADMIN_ROLE) {
+    function setAuthorizedSigner(address _signer) external onlyRole(DEFAULT_ADMIN_ROLE) {
         authorizedSigner = _signer;
         emit SignerUpdated(_signer);
     }

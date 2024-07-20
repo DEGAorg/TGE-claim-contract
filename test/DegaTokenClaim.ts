@@ -28,6 +28,10 @@ describe("DegaTokenClaim", () => {
       admin.address,
     ]);
 
+    await degaTokenClaim
+      .connect(admin)
+      .grantRole(await degaTokenClaim.ADMIN_ROLE(), admin.address);
+
     await degaToken.transfer(
       await degaTokenClaim.getAddress(),
       ethers.parseEther("500000")
@@ -194,7 +198,10 @@ describe("DegaTokenClaim", () => {
       signature = ethers.randomBytes(0);
       await expect(
         degaTokenClaim.connect(user).claimTokens(amount, uid, signature)
-      ).to.be.revertedWithCustomError(degaTokenClaim, "ECDSAInvalidSignatureLength");
+      ).to.be.revertedWithCustomError(
+        degaTokenClaim,
+        "ECDSAInvalidSignatureLength"
+      );
     });
   });
 
@@ -256,6 +263,17 @@ describe("DegaTokenClaim", () => {
       ).to.be.revertedWithCustomError(
         degaTokenClaim,
         "AccessControlUnauthorizedAccount"
+      );
+    });
+
+    it("reverts if the default admin is being removed", async () => {
+      await expect(
+        degaTokenClaim
+          .connect(admin)
+          .revokeRole(await degaTokenClaim.DEFAULT_ADMIN_ROLE(), admin)
+      ).to.be.revertedWithCustomError(
+        degaTokenClaim,
+        "AccessControlEnforcedDefaultAdminRules"
       );
     });
   });
